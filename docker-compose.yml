@@ -1,0 +1,42 @@
+version: '3.8'
+
+volumes:
+  pg_data:
+  static:  # общий volume для статики
+
+services:
+  db:
+    image: postgres:13.10
+    env_file: .env
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+  backend:
+    build: ./backend/
+    env_file: .env
+    depends_on:
+      - db
+    volumes:
+      - static:/backend_static
+    command: >
+      sh -c "python manage.py collectstatic --noinput &&
+             cp -r /app/collected_static/. /backend_static/static/ &&
+             gunicorn backend.wsgi:application --bind 0.0.0.0:8000"
+
+  frontend:
+    build: ./frontend/
+    env_file: .env
+    volumes:
+      - static:/frontend_static  # общий volume
+    command: >
+      sh -c "cp -r /app/build/. /frontend_static/ && http-server /app/build"
+
+  gateway:
+    build: ./gateway/
+    ports:
+      - "8000:80"
+    depends_on:
+      - backend
+      - frontend
+    volumes:
+      - static:/staticfiles  # общий volume
